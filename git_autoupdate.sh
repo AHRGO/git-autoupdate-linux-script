@@ -1,63 +1,84 @@
+#verifies if a branch exists
 branch_exists() {
     git rev-parse --verify "$1" >/dev/null 2>&1
 }
 
+#checks if there are any changes not saved or not committed
 check_status() {
     if ! git diff --quiet || ! git diff --cached --quiet; then
-        echo "Erro: Existem mudanças não salvas ou não commitadas."
+        echo "Erro: Existem mudanças que não foram salvas ou commitadas."
         return 1
     fi
     return 0
 }
 
-create_branch_from_develop() {
-  echo "Criando a branch '$1' a partir de 'develop'..."
-  git checkout develop
-  git pull origin develop
-  git checkout -b "$1"
-  echo "A branch '$1' foi criada com sucesso!"
+#creates a target branch ($2) from a source branch($1)
+create_branch_from() {
+  echo "Criando a branch '$2' a partir de '$1'..."
+  git checkout "$1"
+  git pull origin "$1"
+  git checkout -b "$2"
+  echo "A branch '$2' foi criada com sucesso!"
 }
 
-merge_develop_into() {
-  if branch_exists "$1"; then
-      echo "Atualizando a branch 'develop'..."
-      git checkout develop
-      git pull origin develop
-      echo "Indo para a branch '$1' e fazendo merge com 'develop'..."
+#merges source branch($1) into target branch($2)
+merge_into() {
+  if branch_exists "$2"; then
+      echo "Atualizando a branch '$1'..."
       git checkout "$1"
-      git merge develop
+      git pull origin "$1"
+      echo "Indo para a branch '$2' e fazendo merge com '$1'..."
+      git checkout "$2"
+      git merge "$1"
   else
-      echo "A branch '$1' não existe. Deseja criá-la a partir de 'develop'? [n/Y]"
+      echo "A branch '$2' não existe. Deseja criá-la a partir de '$1'? [n/Y]"
       read -r response
       response=$(echo "$response" | tr '[:upper:]' '[:lower:]') # converte a resposta para minúsculas
       if [[ "$response" == "y" || -z "$response" ]]; then
-        create_branch_from_develop $1
+        create_branch_from $1 $2
       else
-        echo "Operação cancelada. A branch '$1' não foi criada."
+        echo "Operação cancelada. A branch '$2' não foi criada."
       fi
   fi
 }
 
-merge_develop_into_current_branch() {
+#simplify the merging process into a single command
+merge_source_into_current() {
   local current_branch=$(git branch --show-current)
-  echo "Atualizando a branch 'develop'..."
-  git checkout develop
-  git pull origin develop
-  echo "Indo para a branch '$current_branch' e fazendo merge com 'develop'..."
+  echo "Atualizando a branch '$1'..."
+  git checkout "$1"
+  git pull origin "$1"
+  echo "Indo para a branch '$current_branch' e fazendo merge com '$1'..."
   git checkout "$current_branch"
-  git merge develop
-
+  git merge "$1"
 }
 
-
+#merges the current branch into the target branch
 d4c() {
+  local target_branch="homolog" # valor padrão para target_branch
+    local destination_branch=""   # variavel para armazenar o destino
+
+    # Processa os argumentos para definir uma source_branch e destination_branch
+    while [[ "$#" -gt 0 ]]; do
+        case "$1" in
+            -s) 
+                target_branch="$2"
+                shift 2
+                ;;
+            *)
+                destination_branch="$1"
+                shift
+                ;;
+        esac
+    done
+
   if check_status; then
     if [ -z "$1" ]; then
-      merge_develop_into_current_branch
+      merge_source_into_current "$target_branch" 
     else
-      merge_develop_into "$1"
+      merge_into "$target_branch" "$1" 
     fi
   else 
-    echo "Por favor, commit ou stash as alterações antes de continuar."
+    echo "Por favor, commite ou faça stash das alterações antes de continuar."
   fi
 }
